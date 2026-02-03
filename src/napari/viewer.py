@@ -40,7 +40,7 @@ class Viewer(ViewerModel):
     def __init__(
         self,
         *,
-        title='napari',
+        title='napari (Emit Imaging)',
         ndisplay=2,
         order=(),
         axis_labels=(),

@@ -26,6 +26,7 @@ from napari.utils.colormaps.colormap import (
 )
 from napari.utils.colormaps.inverse_colormaps import inverse_cmaps
 from napari.utils.colormaps.standardize_color import transform_color
+from napari.utils.colormaps._fiji_luts import fiji_fire
 from napari.utils.colormaps.vendored.cm import cmap_d
 from napari.utils.translations import trans
 
@@ -112,15 +113,7 @@ SIMPLE_COLORMAPS = {
 
 # readd fire and ice colormap for backwards compatibility (see #7858)
 VISPY_OLD_COLORMAPS = {
-    'fire': Colormap(
-        name='fire',
-        display_name='fire',
-        colors=[
-            [1.0, 1.0, 1.0, 1.0],
-            [1.0, 1.0, 0.0, 1.0],
-            [1.0, 0.0, 0.0, 1.0],
-        ],
-    ),
+    'fire': fiji_fire(),
     'ice': Colormap(
         name='ice',
         display_name='ice',

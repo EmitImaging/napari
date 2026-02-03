@@ -244,7 +244,7 @@ class Image(IntensityVisualizationMixin, ScalarFieldBase):
         axis_labels: Sequence[str] | None = None,
         blending: str = 'translucent',
         cache: bool = True,
-        colormap: str = 'gray',
+        colormap: str = 'fire',
         contrast_limits: tuple[float, float] | None = None,
         custom_interpolation_kernel_2d: npt.NDArray | None = None,
         depiction: str = 'volume',

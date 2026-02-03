@@ -85,6 +85,19 @@ def init_qactions() -> None:
     # register menubar submenus
     app.menus.append_menu_items(chain(DEBUG_SUBMENUS, LAYERS_SUBMENUS))
 
+    # CFT custom registrations
+    try:
+        print("Setting up the CFT menus...")
+        from cft.bootstrap import bootstrap
+        from napari._app_model import get_app_model
+
+        bootstrap(get_app_model())
+
+    except Exception as e:
+        print("Failed to register CFT menus:", e)
+        pass
+
+
 
 def add_dummy_actions(context: Context) -> None:
     """Register dummy 'Empty' actions for all contributable menus.

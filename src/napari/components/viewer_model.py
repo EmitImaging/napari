@@ -1098,6 +1098,10 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
             The newly-created image layer or list of image layers.
         """
 
+            # If user didn't specify a colormap, default to "fire"
+        if colormap is None:
+            colormap = "fire"
+
         if colormap is not None:
             # standardize colormap argument(s) to Colormaps, and make sure they
             # are in AVAILABLE_COLORMAPS.  This will raise one of many various
