@@ -76,6 +76,7 @@ dependencies = [
     "wrapt>=1.13.3",
     "cft_zarr>=0.0.4",
     "napari-imagecodecs>=0.0.3",
+    "napari-itk-io>=0.4.1",
 ]
 dynamic = [
     "version",
