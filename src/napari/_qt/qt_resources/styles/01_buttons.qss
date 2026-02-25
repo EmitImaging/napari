@@ -215,6 +215,18 @@ QtModePushButton[mode="delete_shape"] {
    image: url("theme_{{ id }}:/delete_shape.svg");
 }
 
+QPushButton[mode="image_up"] {
+  image: url("theme_{{ id }}:/image_up.svg");
+}
+
+QPushButton[mode="folder_open"] {
+  image: url("theme_{{ id }}:/folder_open.svg");
+}
+
+QPushButton[mode="folder_pen"] {
+  image: url("theme_{{ id }}:/folder_pen.svg");
+}
+
 QWidget[emphasized="true"] QtModePushButton[mode="delete_shape"]:pressed {
   background-color: {{ error }};
 }

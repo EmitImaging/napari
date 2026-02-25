@@ -339,6 +339,7 @@ napari = "napari.utils._testsupport"
 
 [project.entry-points."napari.manifest"]
 napari_builtins = "napari_builtins:builtins.yaml"
+napari-cft-viz = "cft.plugins.napari_cft_viz:napari.yaml"
 
 [project.scripts]
 napari = "napari.__main__:main"
@@ -1011,3 +1012,9 @@ layers = ["napari.qt","napari.components"]
 ignore_imports = [
     "napari.plugins._npe2 -> napari._qt._qplugins",
 ]
+
+[tool.hatch.build.targets.wheel.force-include]
+"napari/src/cft/plugins/napari_cft_viz/napari.yaml" = "napari/_cft_viz/napari.yaml"
+
+[tool.hatch.build.targets.sdist.force-include]
+"napari/src/cft/plugins/napari_cft_viz/napari.yaml" = "napari/_cft_viz/napari.yaml"
