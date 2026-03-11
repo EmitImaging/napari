@@ -199,6 +199,10 @@ QtModeRadioButton[mode="add_points"]::indicator {
     image: url("theme_{{ id }}:/add.svg");
 }
 
+QtModeRadioButton[mode="labels_bbox"]::indicator {
+  image: url("theme_{{ id }}:/rectangle.svg");
+}
+
 QtModePushButton[mode="shuffle"] {
    image: url("theme_{{ id }}:/shuffle.svg");
 }

@@ -110,6 +110,13 @@ class QtLabelsControls(QtLayerControls):
             True,
             'activate_labels_polygon_mode',
         )
+        self.bbox_button = self._radio_button(
+            layer,
+            'labels_bbox',
+            Mode.POLYGON,
+            True,
+            'activate_labels_polygon_mode',
+        )
         self.fill_button = self._radio_button(
             layer,
             'fill',
@@ -131,8 +138,10 @@ class QtLabelsControls(QtLayerControls):
         self.button_grid.addWidget(self.erase_button, 0, 1)
         self.button_grid.addWidget(self.paint_button, 0, 2)
         self.button_grid.addWidget(self.polygon_button, 0, 3)
-        self.button_grid.addWidget(self.fill_button, 0, 4)
-        self.button_grid.addWidget(self.pick_button, 0, 5)
+        self.button_grid.addWidget(self.bbox_button, 0, 4)
+        self.button_grid.addWidget(self.fill_button, 0, 5)
+        self.button_grid.addWidget(self.pick_button, 0, 6   )
+        self._wrap_cft_bbox_button(self.bbox_button)
 
         # Setup widgets controls
         self._label_control = QtLabelControl(self, layer)
@@ -213,3 +222,22 @@ class QtLabelsControls(QtLayerControls):
             and self.layer.n_edit_dimensions == 2
             and self.ndisplay == 2
         )
+    
+    def _wrap_cft_bbox_button(self, btn) -> None:
+        """
+        Optional hook for downstream forks (CFT) to inject a button into the Labels controls.
+        """
+        try:
+            from cft.segmentation._create_seg_controls import (
+                wrap_cft_bbox_button,
+            )
+        except Exception:
+            print("CFT bbox segmentation controls not available, skipping...")
+            return
+
+        try:
+            wrap_cft_bbox_button(labels_controls=self, bbox_button=self.bbox_button, layer=self.layer)
+        except Exception:
+            # Keep napari usable even if CFT code errors.
+            print("Error wrapping CFT bbox segmentation controls, skipping...")
+            return
