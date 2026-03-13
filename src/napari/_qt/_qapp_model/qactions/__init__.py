@@ -97,6 +97,28 @@ def init_qactions() -> None:
         print("Failed to register CFT menus:", e)
         pass
 
+    # Enable async slicing for responsive Z-sliding and panning
+    try:
+        from napari.settings import get_settings
+        get_settings().experimental.async_ = True
+    except Exception:
+        pass
+
+    # Limit dask cache to 4 GB (default 25% of RAM can be excessive)
+    try:
+        from napari.utils import resize_dask_cache
+        resize_dask_cache(nbytes=4 * 1024**3)
+    except Exception:
+        pass
+
+    # Auto-open the CFT Study Loader above the layer controls
+    try:
+        from cft.loader._command import auto_open_study_loader
+        auto_open_study_loader()
+    except Exception as e:
+        print("Failed to auto-open Study Loader:", e)
+        pass
+
 
 
 def add_dummy_actions(context: Context) -> None:
