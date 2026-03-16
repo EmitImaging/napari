@@ -278,6 +278,7 @@ class Labels(ScalarFieldBase):
         Mode.FILL: draw,
         Mode.ERASE: draw,
         Mode.POLYGON: no_op,  # the overlay handles mouse events in this mode
+        Mode.BBOX_SEG: no_op,
     }
 
     brush_size_on_mouse_move = BrushSizeOnMouseMove(min_brush_size=1)
@@ -292,6 +293,7 @@ class Labels(ScalarFieldBase):
         Mode.FILL: no_op,
         Mode.ERASE: brush_size_on_mouse_move,
         Mode.POLYGON: no_op,  # the overlay handles mouse events in this mode
+        Mode.BBOX_SEG: no_op,
     }
 
     _cursor_modes: ClassVar[dict[Mode, str]] = {  # type: ignore[assignment]
@@ -302,6 +304,7 @@ class Labels(ScalarFieldBase):
         Mode.FILL: 'cross',
         Mode.ERASE: 'circle',
         Mode.POLYGON: 'cross',
+        Mode.BBOX_SEG: 'cross',
     }
 
     _history_limit = 100

@@ -44,6 +44,7 @@ class Mode(StringEnum):
     FILL = auto()
     ERASE = auto()
     POLYGON = auto()
+    BBOX_SEG = auto()
 
 
 class LabelColorMode(StringEnum):

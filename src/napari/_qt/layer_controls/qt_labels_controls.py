@@ -113,9 +113,9 @@ class QtLabelsControls(QtLayerControls):
         self.bbox_button = self._radio_button(
             layer,
             'labels_bbox',
-            Mode.POLYGON,
+            Mode.BBOX_SEG,
             True,
-            'activate_labels_polygon_mode',
+            'activate_labels_bbox_mode',
         )
         self.fill_button = self._radio_button(
             layer,
@@ -225,19 +225,19 @@ class QtLabelsControls(QtLayerControls):
     
     def _wrap_cft_bbox_button(self, btn) -> None:
         """
-        Optional hook for downstream forks (CFT) to inject a button into the Labels controls.
+        Optional hook for downstream CFT forks to inject a button into the Labels controls.
         """
         try:
             from cft.segmentation._create_seg_controls import (
                 wrap_cft_bbox_button,
             )
         except Exception:
-            print("CFT bbox segmentation controls not available, skipping...")
+            print("CFT bounding box segmentation controls not available, skipping...")
             return
 
         try:
             wrap_cft_bbox_button(labels_controls=self, bbox_button=self.bbox_button, layer=self.layer)
         except Exception:
             # Keep napari usable even if CFT code errors.
-            print("Error wrapping CFT bbox segmentation controls, skipping...")
+            print("Error wrapping CFT bounding box segmentation control, skipping...")
             return
