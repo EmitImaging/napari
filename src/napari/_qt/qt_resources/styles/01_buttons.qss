@@ -227,6 +227,10 @@ QPushButton[mode="folder_open"] {
   image: url("theme_{{ id }}:/folder_open.svg");
 }
 
+QPushButton[mode="cloud"] {
+  image: url("theme_{{ id }}:/cloud.svg");
+}
+
 QPushButton[mode="folder_pen"] {
   image: url("theme_{{ id }}:/folder_pen.svg");
 }
