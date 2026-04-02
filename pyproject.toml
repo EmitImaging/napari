@@ -74,9 +74,10 @@ dependencies = [
     "typing_extensions>=4.12",
     "vispy>=0.16.1,<0.17",
     "wrapt>=1.13.3",
-    "cft_zarr>=0.0.4",
+    "cft_zarr>=0.0.8",
     "napari-imagecodecs>=0.0.3",
     "napari-itk-io>=0.4.1",
+    "SimpleITK>=2.3.0",
 ]
 dynamic = [
     "version",
