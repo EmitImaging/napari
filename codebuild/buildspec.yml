@@ -1,0 +1,279 @@
+version: 0.2
+
+env:
+  shell: powershell.exe
+  variables:
+    APP_BASE_NAME: "napari"
+    VENV_DIR: ".venv-build"
+    QT_BACKEND: "pyside6"
+    CFT_VERSION: "3"
+    NAPARI_CFT_SRC_BRANCH: ""
+    NAPARI_CFT_SRC_CLONE_DEPTH: "1"
+    PIP_CACHE_DIR: ".codebuild-cache/pip"
+
+phases:
+  install:
+    runtime-versions:
+      python: 3.11
+    commands:
+      - |
+        $ErrorActionPreference = "Stop"
+        Set-Location $env:CODEBUILD_SRC_DIR
+
+        function Write-Step {
+          param([string]$Message)
+          Write-Host ""
+          Write-Host "==== $Message ====" -ForegroundColor Cyan
+        }
+
+        function Fail {
+          param([string]$Message)
+          Write-Error $Message
+          exit 1
+        }
+
+        $env:PYTHONUTF8 = "1"
+        $env:PIP_DISABLE_PIP_VERSION_CHECK = "1"
+        $env:PIP_NO_PYTHON_VERSION_WARNING = "1"
+        $env:PIP_CACHE_DIR = Join-Path $env:CODEBUILD_SRC_DIR $env:PIP_CACHE_DIR
+        New-Item -ItemType Directory -Force -Path $env:PIP_CACHE_DIR | Out-Null
+
+        Write-Step "Repository root"
+        Write-Host $env:CODEBUILD_SRC_DIR
+
+        if (-not (Test-Path ".\pyproject.toml")) {
+          Fail "pyproject.toml not found in $env:CODEBUILD_SRC_DIR"
+        }
+
+        if (-not (Test-Path ".\src\napari\__init__.py")) {
+          Fail "src\napari\__init__.py not found. This does not look like a napari source tree."
+        }
+
+        Write-Step "Checking out napari-cft into src\\cft"
+        if ([string]::IsNullOrEmpty($env:NAPARI_CFT_SRC_REPO_URL)) {
+          Fail "NAPARI_CFT_SRC_REPO_URL is not set."
+        }
+
+        $CftDir = Join-Path $env:CODEBUILD_SRC_DIR "src\cft"
+        if (Test-Path $CftDir) {
+          Remove-Item $CftDir -Recurse -Force
+        }
+
+        $cloneArgs = @("clone")
+        if (-not [string]::IsNullOrEmpty($env:NAPARI_CFT_SRC_CLONE_DEPTH)) {
+          $cloneArgs += @("--depth", $env:NAPARI_CFT_SRC_CLONE_DEPTH)
+        }
+        if (-not [string]::IsNullOrEmpty($env:NAPARI_CFT_SRC_BRANCH)) {
+          $cloneArgs += @("--branch", $env:NAPARI_CFT_SRC_BRANCH)
+        }
+        $cloneArgs += @($env:NAPARI_CFT_SRC_REPO_URL, $CftDir)
+
+        git --version
+        & git @cloneArgs
+
+        if (-not (Test-Path ".\src\cft\__init__.py")) {
+          Fail "src\cft\__init__.py not found. This does not look like a napari-cft source tree."
+        }
+
+        Write-Step "Python runtime"
+        python --version
+        where.exe python
+
+        Write-Step "Creating build virtual environment"
+        if (Test-Path ".\$env:VENV_DIR") {
+          Remove-Item ".\$env:VENV_DIR" -Recurse -Force
+        }
+        python -m venv $env:VENV_DIR
+
+        $VenvPython = Join-Path $env:CODEBUILD_SRC_DIR "$($env:VENV_DIR)\Scripts\python.exe"
+        if (-not (Test-Path $VenvPython)) {
+          Fail "Failed to create virtual environment at $env:VENV_DIR"
+        }
+
+        Write-Step "Upgrading packaging tools"
+        & $VenvPython -m pip install --upgrade pip setuptools wheel packaging
+
+        Write-Step "Installing napari with Qt backend [$env:QT_BACKEND]"
+        & $VenvPython -m pip install -e ".[${env:QT_BACKEND}]"
+
+        Write-Step "Installing PyInstaller"
+        & $VenvPython -m pip install pyinstaller
+
+        Write-Step "Verifying imports"
+        & $VenvPython -c "import napari; print('napari ok:', napari.__file__)"
+        & $VenvPython -c "import cft; print('cft ok:', cft.__file__)"
+
+  build:
+    commands:
+      - |
+        $ErrorActionPreference = "Stop"
+        Set-Location $env:CODEBUILD_SRC_DIR
+
+        function Write-Step {
+          param([string]$Message)
+          Write-Host ""
+          Write-Host "==== $Message ====" -ForegroundColor Cyan
+        }
+
+        function Fail {
+          param([string]$Message)
+          Write-Error $Message
+          exit 1
+        }
+
+        $VenvPython = Join-Path $env:CODEBUILD_SRC_DIR "$($env:VENV_DIR)\Scripts\python.exe"
+        if (-not (Test-Path $VenvPython)) {
+          Fail "Build virtual environment not found at $env:VENV_DIR"
+        }
+
+        Write-Step "Resolving installed napari version"
+        $ResolvedNapariVersion = (& $VenvPython -c "import importlib.metadata as m; print(m.version('napari'))").Trim()
+        if (-not $ResolvedNapariVersion) {
+          Fail "Could not determine installed napari version."
+        }
+
+        Write-Step "Normalizing napari version"
+        $BaseNapariVersion = (& $VenvPython -c "from packaging.version import Version; import importlib.metadata as m; print(Version(m.version('napari')).base_version)").Trim()
+        if (-not $BaseNapariVersion) {
+          Fail "Could not normalize installed napari version."
+        }
+
+        $AppName = "$($env:APP_BASE_NAME)-$BaseNapariVersion-cft.$($env:CFT_VERSION)"
+
+        Write-Host "Resolved napari version:   $ResolvedNapariVersion" -ForegroundColor Yellow
+        Write-Host "Normalized napari version: $BaseNapariVersion" -ForegroundColor Green
+        Write-Host "Resolved app name:         $AppName" -ForegroundColor Green
+
+        Write-Step "Writing launcher script"
+        @(
+          'from napari.__main__ import main'
+          ''
+          'if __name__ == "__main__":'
+          '    raise SystemExit(main())'
+        ) | Set-Content -Path ".\launch_napari_cft.py" -Encoding UTF8
+
+        Write-Step "Cleaning previous PyInstaller output"
+        @(
+          ".\build",
+          ".\dist",
+          ".\$AppName.spec"
+        ) | ForEach-Object {
+          if (Test-Path $_) {
+            Remove-Item $_ -Recurse -Force
+          }
+        }
+
+        Write-Step "Running PyInstaller"
+        $pyiArgs = @(
+          "--noconfirm"
+          "--console"
+          "--name", $AppName
+          "--collect-all", "napari"
+          "--collect-all", "cft"
+          "--collect-all", "magicgui"
+          "--collect-all", "vispy"
+          "--collect-all", "qtpy"
+          "--collect-all", "superqt"
+          "--collect-all", "napari_plugin_engine"
+          "--collect-all", "npe2"
+          "--collect-all", "napari_console"
+          "--copy-metadata", "napari"
+          "--copy-metadata", "napari-plugin-engine"
+          "--copy-metadata", "npe2"
+          "--copy-metadata", "imageio"
+          "--copy-metadata", "tifffile"
+          "launch_napari_cft.py"
+        )
+
+        if ($env:QT_BACKEND -in @("pyqt", "pyqt6")) {
+          $pyiArgs += @(
+            "--hidden-import", "PyQt6"
+            "--hidden-import", "PyQt6.QtCore"
+            "--hidden-import", "PyQt6.QtGui"
+            "--hidden-import", "PyQt6.QtWidgets"
+          )
+        }
+
+        if ($env:QT_BACKEND -in @("pyside", "pyside6")) {
+          $pyiArgs += @(
+            "--hidden-import", "PySide6"
+            "--hidden-import", "PySide6.QtCore"
+            "--hidden-import", "PySide6.QtGui"
+            "--hidden-import", "PySide6.QtWidgets"
+          )
+        }
+
+        & $VenvPython -m PyInstaller @pyiArgs
+
+        Write-Step "Build finished"
+        $DistDir = Join-Path $env:CODEBUILD_SRC_DIR "dist\$AppName"
+        if (-not (Test-Path $DistDir)) {
+          Fail "PyInstaller completed but dist folder was not found."
+        }
+
+        Write-Step "Compressing artifact"
+        $ZipName = "$AppName-windows-x64.zip"
+        $ZipPath = Join-Path $env:CODEBUILD_SRC_DIR "dist\$ZipName"
+        if (Test-Path $ZipPath) {
+          Remove-Item $ZipPath -Force
+        }
+        Compress-Archive -Path $DistDir -DestinationPath $ZipPath
+        $ZipName | Set-Content -Path ".\dist\artifact_zip_name.txt" -Encoding ASCII
+        Write-Host "Created artifact: $ZipPath" -ForegroundColor Green
+
+  post_build:
+    commands:
+      - |
+        $ErrorActionPreference = "Stop"
+        Set-Location $env:CODEBUILD_SRC_DIR
+
+        function Get-BranchName {
+          if (-not [string]::IsNullOrEmpty($env:CODEBUILD_WEBHOOK_HEAD_REF)) {
+            return ($env:CODEBUILD_WEBHOOK_HEAD_REF -replace '^refs/heads/', '')
+          }
+
+          if (-not [string]::IsNullOrEmpty($env:CODEBUILD_SOURCE_VERSION) -and $env:CODEBUILD_SOURCE_VERSION -notmatch '^[0-9a-f]{40}$') {
+            return $env:CODEBUILD_SOURCE_VERSION
+          }
+
+          return "manual"
+        }
+
+        $zipName = (Get-Content ".\dist\artifact_zip_name.txt").Trim()
+        $zipPath = Join-Path $env:CODEBUILD_SRC_DIR "dist\$zipName"
+
+        if (-not (Test-Path $zipPath)) {
+          Write-Error "Expected build artifact not found: $zipPath"
+          exit 1
+        }
+
+        if ([string]::IsNullOrEmpty($env:CODEBUILD_RESOLVED_SOURCE_VERSION)) {
+          $commitShort = "manual"
+        } else {
+          $commitShort = $env:CODEBUILD_RESOLVED_SOURCE_VERSION.Substring(0, [Math]::Min(8, $env:CODEBUILD_RESOLVED_SOURCE_VERSION.Length))
+        }
+
+        $ref = Get-BranchName
+
+        if (-not [string]::IsNullOrEmpty($env:BUILD_ARTIFACTS_BUCKET)) {
+          $prefix = if ([string]::IsNullOrEmpty($env:BUILD_ARTIFACTS_PREFIX)) {
+            "napari-cft"
+          } else {
+            $env:BUILD_ARTIFACTS_PREFIX.TrimEnd('/')
+          }
+
+          Write-Host "Uploading artifact to s3://$env:BUILD_ARTIFACTS_BUCKET/$prefix/$ref/$commitShort/"
+          aws s3 cp $zipPath "s3://$env:BUILD_ARTIFACTS_BUCKET/$prefix/$ref/$commitShort/$zipName"
+          aws s3 cp $zipPath "s3://$env:BUILD_ARTIFACTS_BUCKET/$prefix/$ref/latest/$zipName"
+        } else {
+          Write-Host "BUILD_ARTIFACTS_BUCKET not set; skipping manual S3 upload."
+        }
+
+artifacts:
+  files:
+    - "dist/*.zip"
+    - "dist/artifact_zip_name.txt"
+
+cache:
+  paths:
+    - ".codebuild-cache/pip/**/*"
