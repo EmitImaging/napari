@@ -2,6 +2,7 @@ version: 0.2
 
 env:
   shell: powershell.exe
+  git-credential-helper: yes
   variables:
     APP_BASE_NAME: "napari"
     VENV_DIR: ".venv-build"
@@ -35,6 +36,7 @@ phases:
         $env:PYTHONUTF8 = "1"
         $env:PIP_DISABLE_PIP_VERSION_CHECK = "1"
         $env:PIP_NO_PYTHON_VERSION_WARNING = "1"
+        $env:GIT_TERMINAL_PROMPT = "0"
         $env:PIP_CACHE_DIR = Join-Path $env:CODEBUILD_SRC_DIR $env:PIP_CACHE_DIR
         New-Item -ItemType Directory -Force -Path $env:PIP_CACHE_DIR | Out-Null
 
@@ -59,7 +61,7 @@ phases:
           Remove-Item $CftDir -Recurse -Force
         }
 
-        $cloneArgs = @("clone")
+        $cloneArgs = @("clone", "--progress", "--single-branch")
         if (-not [string]::IsNullOrEmpty($env:NAPARI_CFT_SRC_CLONE_DEPTH)) {
           $cloneArgs += @("--depth", $env:NAPARI_CFT_SRC_CLONE_DEPTH)
         }
