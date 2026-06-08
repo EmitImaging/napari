@@ -231,6 +231,14 @@ QPushButton[mode="cloud"] {
   image: url("theme_{{ id }}:/cloud.svg");
 }
 
+QPushButton[mode="refresh-cw"] {
+  image: url("theme_{{ id }}:/refresh-cw.svg");
+}
+
+QPushButton[mode="trash"] {
+  image: url("theme_{{ id }}:/trash.svg");
+}
+
 QPushButton[mode="folder_pen"] {
   image: url("theme_{{ id }}:/folder_pen.svg");
 }

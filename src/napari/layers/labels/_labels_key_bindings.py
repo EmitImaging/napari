@@ -44,6 +44,13 @@ def activate_labels_polygon_mode(layer: Labels):
     layer.mode = Mode.POLYGON
 
 
+@register_label_mode_action(
+    trans._('Activate the bounding box segmentation tool')
+)
+def activate_labels_bbox_mode(layer: Labels):
+    layer.mode = Mode.BBOX_SEG
+
+
 @register_label_mode_action(trans._('Activate the fill bucket'))
 def activate_labels_fill_mode(layer: Labels):
     layer.mode = Mode.FILL
@@ -66,6 +73,7 @@ labels_fun_to_mode = [
     (activate_labels_erase_mode, Mode.ERASE),
     (activate_labels_paint_mode, Mode.PAINT),
     (activate_labels_polygon_mode, Mode.POLYGON),
+    (activate_labels_bbox_mode, Mode.BBOX_SEG),
     (activate_labels_fill_mode, Mode.FILL),
     (activate_labels_picker_mode, Mode.PICK),
 ]

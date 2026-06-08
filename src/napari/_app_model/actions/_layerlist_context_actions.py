@@ -48,6 +48,16 @@ LAYERLIST_CONTEXT_SUBMENUS = [
     (
         MenuId.LAYERLIST_CONTEXT,
         SubmenuItem(
+            submenu=MenuId.LAYERS_CONTEXT_APPLY_AS_MASK,
+            title=trans._('Apply as Mask'),
+            group=MenuGroup.LAYERLIST_CONTEXT.SPLIT_MERGE,
+            order=None,
+            enablement=LLSCK.all_selected_layers_labels,
+        ),
+    ),
+    (
+        MenuId.LAYERLIST_CONTEXT,
+        SubmenuItem(
             submenu=MenuId.LAYERS_CONTEXT_COPY_SPATIAL,
             title=trans._('Copy scale and transforms'),
             group=MenuGroup.LAYERLIST_CONTEXT.COPY_SPATIAL,

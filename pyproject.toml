@@ -138,6 +138,10 @@ bermuda = [
 partsegcore = [
     "PartSegCore-compiled-backend>=0.15.11",
 ]
+sam2 = [
+    "huggingface_hub>=0.24.0",
+    "sam2>=1.1.0",
+]
 all_optional = [
     "napari[optional,partsegcore]"
 ]
@@ -267,6 +271,10 @@ testing = [
 ]
 testing_extra = [
     "torch>=1.10.2",
+]
+sam2 = [
+    "huggingface_hub>=0.24.0",
+    "sam2>=1.1.0",
 ]
 # needed for gallery examples
 gallery = [
