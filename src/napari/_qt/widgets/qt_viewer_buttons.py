@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from qtpy.QtCore import QEvent, Qt
 from qtpy.QtWidgets import (
     QApplication,
+    QCheckBox,
     QDoubleSpinBox,
     QFrame,
     QGridLayout,
@@ -544,9 +545,11 @@ class QtViewerButtons(QFrame):
         grid_width = QtSpinBox(popup)
         grid_height = QtSpinBox(popup)
         grid_spacing = QDoubleSpinBox(popup)
+        grid_overlay_labels = QCheckBox(popup)
         shape_help_symbol = QtToolTipLabel(self)
         stride_help_symbol = QtToolTipLabel(self)
         spacing_help_symbol = QtToolTipLabel(self)
+        overlay_help_symbol = QtToolTipLabel(self)
 
         shape_help_msg = trans._(
             'Number of rows and columns in the grid.\n'
@@ -565,6 +568,11 @@ class QtViewerButtons(QFrame):
             'The amount of spacing between grid viewboxes.\n'
             'If between 0 and 1, it is interpreted as a proportion of the size of the viewboxes.\n'
             'If equal or greater than 1, it is interpreted as screen pixels.'
+        )
+
+        overlay_help_msg = trans._(
+            'Overlay every Labels layer on each occupied image tile.\n'
+            'When enabled, only Image layers determine the grid layout.'
         )
 
         stride_min = self.viewer.grid.__fields__['stride'].type_.ge
@@ -616,6 +624,11 @@ class QtViewerButtons(QFrame):
         grid_spacing.valueChanged.connect(self._update_grid_spacing)
         self.grid_spacing_box = grid_spacing
 
+        grid_overlay_labels.setObjectName('gridOverlayLabelsBox')
+        grid_overlay_labels.setChecked(self.viewer.grid.overlay_labels)
+        grid_overlay_labels.toggled.connect(self._update_grid_overlay_labels)
+        self.grid_overlay_labels_box = grid_overlay_labels
+
         # help symbols
         shape_help_symbol.setObjectName('help_label')
         shape_help_symbol.setToolTip(shape_help_msg)
@@ -625,6 +638,9 @@ class QtViewerButtons(QFrame):
 
         spacing_help_symbol.setObjectName('help_label')
         spacing_help_symbol.setToolTip(spacing_help_msg)
+
+        overlay_help_symbol.setObjectName('help_label')
+        overlay_help_symbol.setToolTip(overlay_help_msg)
 
         # layout
         grid_layout = QGridLayout()
@@ -643,6 +659,10 @@ class QtViewerButtons(QFrame):
         grid_layout.addWidget(QLabel(trans._('Grid spacing:')), 3, 0)
         grid_layout.addWidget(grid_spacing, 3, 1)
         grid_layout.addWidget(spacing_help_symbol, 3, 2)
+
+        grid_layout.addWidget(QLabel(trans._('Overlay labels:')), 4, 0)
+        grid_layout.addWidget(grid_overlay_labels, 4, 1)
+        grid_layout.addWidget(overlay_help_symbol, 4, 2)
 
         popup.frame.setLayout(grid_layout)
         popup.show_above_mouse()
@@ -689,6 +709,11 @@ class QtViewerButtons(QFrame):
             New grid spacing value.
         """
         self.viewer.grid.spacing = value
+
+    def _update_grid_overlay_labels(self, value: bool) -> None:
+        """Toggle label overlays in grid view."""
+
+        self.viewer.grid.overlay_labels = value
 
 
 def _omit_viewer_args(constructor):

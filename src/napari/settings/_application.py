@@ -236,6 +236,14 @@ class ApplicationSettings(EventedModel):
         ),
     )
 
+    grid_overlay_labels: bool = Field(
+        default=False,
+        title=trans._('Grid Overlay Labels'),
+        description=trans._(
+            'Overlay every Labels layer on each occupied image tile in grid view.'
+        ),
+    )
+
     confirm_close_window: bool = Field(
         default=True,
         title=trans._('Confirm window or application closing'),

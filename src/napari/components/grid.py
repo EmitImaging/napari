@@ -39,6 +39,9 @@ class GridCanvas(EventedModel):
 
         .. versionadded:: 0.6.0
             ``spacing`` was added in 0.6.0.
+    overlay_labels : bool
+        If enabled, label layers are overlaid on each occupied image tile
+        instead of consuming their own grid viewboxes.
     """
 
     # fields
@@ -48,6 +51,7 @@ class GridCanvas(EventedModel):
     shape: tuple[GridHeight, GridWidth] = (-1, -1)  # type: ignore[valid-type]
     enabled: bool = False
     spacing: GridSpacing = 0.0  # type: ignore[valid-type]
+    overlay_labels: bool = False
 
     def actual_shape(self, nlayers: int = 1) -> tuple[int, int]:
         """Return the actual shape of the grid.

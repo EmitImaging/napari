@@ -18,7 +18,7 @@ from napari._vispy.camera import VispyCamera
 from napari._vispy.mouse_event import NapariMouseEvent
 from napari._vispy.utils.cursor import QtCursorVisual
 from napari._vispy.utils.gl import get_max_texture_sizes
-from napari._vispy.utils.visual import create_vispy_overlay
+from napari._vispy.utils.visual import create_vispy_layer, create_vispy_overlay
 from napari.components._viewer_constants import CanvasPosition
 from napari.components.overlays import CanvasOverlay
 from napari.utils._proxies import ReadOnlyWrapper
@@ -196,6 +196,7 @@ class VispyCanvas:
         self._layer_overlay_to_visual: dict[
             Layer, dict[Overlay, VispyBaseOverlay]
         ] = {}
+        self._grid_label_duplicates: dict[Layer, list[VispyBaseLayer[Layer]]] = {}
         self._key_map_handler = key_map_handler
         self._instances.add(self)
 
@@ -263,6 +264,7 @@ class VispyCanvas:
         self.viewer.grid.events.shape.connect(self._update_scenegraph)
         self.viewer.grid.events.enabled.connect(self._update_scenegraph)
         self.viewer.grid.events.spacing.connect(self._update_scenegraph)
+        self.viewer.grid.events.overlay_labels.connect(self._update_scenegraph)
         self.viewer._overlays.events.added.connect(
             self._update_viewer_overlays
         )
@@ -326,6 +328,7 @@ class VispyCanvas:
         self.bgcolor = self._last_theme_color
 
     def _disconnect_events(self) -> None:
+        self._clear_grid_label_duplicates()
         disconnect_events(self.viewer.events, self)
         disconnect_events(self.viewer._overlays.events, self)
         disconnect_events(self.viewer.camera.events, self)
@@ -478,6 +481,166 @@ class VispyCanvas:
 
         return tuple(position_world)
 
+    def _grid_overlay_labels_enabled(self) -> bool:
+        return self.viewer.grid.enabled and self.viewer.grid.overlay_labels
+
+    def _grid_layout_layer_indices(self) -> tuple[int, ...]:
+        if not self._grid_overlay_labels_enabled():
+            return tuple(range(len(self.viewer.layers)))
+
+        return tuple(
+            index
+            for index, layer in enumerate(self.viewer.layers)
+            if layer._type_string == 'image'
+        )
+
+    def _grid_overlay_label_indices(self) -> tuple[int, ...]:
+        if not self._grid_overlay_labels_enabled():
+            return ()
+
+        return tuple(
+            index
+            for index, layer in enumerate(self.viewer.layers)
+            if layer._type_string == 'labels'
+        )
+
+    def _grid_layout_layer_count(self) -> int:
+        return len(self._grid_layout_layer_indices())
+
+    def _grid_viewboxes(
+        self, *, include_overlay_labels: bool = False
+    ) -> tuple[tuple[tuple[int, int], tuple[int, ...]], ...]:
+        if not self._grid_overlay_labels_enabled():
+            return tuple(self.viewer.grid.iter_viewboxes(len(self.viewer.layers)))
+
+        layout_indices = self._grid_layout_layer_indices()
+        overlay_label_set = set(self._grid_overlay_label_indices())
+        viewboxes = []
+
+        for grid_coords, virtual_indices in self.viewer.grid.iter_viewboxes(
+            len(layout_indices)
+        ):
+            layer_indices = tuple(
+                layout_indices[virtual_index] for virtual_index in virtual_indices
+            )
+            if include_overlay_labels and layer_indices:
+                combined_indices = overlay_label_set.union(layer_indices)
+                layer_indices = tuple(
+                    index
+                    for index in range(len(self.viewer.layers))
+                    if index in combined_indices
+                )
+            viewboxes.append((grid_coords, layer_indices))
+
+        return tuple(viewboxes)
+
+    def _grid_occupied_views(self) -> tuple[ViewBox, ...]:
+        return tuple(
+            self.grid[row, col]
+            for (row, col), layer_indices in self._grid_viewboxes()
+            if layer_indices
+        )
+
+    def _grid_position_for_layer(
+        self, layer: Layer
+    ) -> tuple[int, int] | None:
+        if not self.viewer.grid.enabled:
+            return (0, 0)
+
+        if not self._grid_overlay_labels_enabled():
+            return self.viewer.grid.position(
+                self.viewer.layers.index(layer),
+                len(self.viewer.layers),
+            )
+
+        layout_indices = self._grid_layout_layer_indices()
+        if not layout_indices:
+            return None
+
+        if layer._type_string == 'image':
+            layer_index = self.viewer.layers.index(layer)
+            layout_index = layout_indices.index(layer_index)
+            return self.viewer.grid.position(layout_index, len(layout_indices))
+
+        if layer._type_string == 'labels':
+            return self.viewer.grid.position(0, len(layout_indices))
+
+        return None
+
+    def _grid_label_visuals(
+        self, layer: Layer
+    ) -> tuple[VispyBaseLayer[Layer], ...]:
+        return (
+            self.layer_to_visual[layer],
+            *self._grid_label_duplicates.get(layer, []),
+        )
+
+    def _grid_visual_for_layer(
+        self, layer: Layer, occupied_view_index: int | None = None
+    ) -> VispyBaseLayer[Layer]:
+        if (
+            occupied_view_index is not None
+            and self._grid_overlay_labels_enabled()
+            and layer._type_string == 'labels'
+        ):
+            return self._grid_label_visuals(layer)[occupied_view_index]
+
+        return self.layer_to_visual[layer]
+
+    def _close_grid_label_duplicates(
+        self, visuals: list[VispyBaseLayer[Layer]]
+    ) -> None:
+        for vispy_layer in visuals:
+            disconnect_events(self.viewer.camera.events, vispy_layer)
+            vispy_layer.close()
+
+    def _clear_grid_label_duplicates(self) -> None:
+        for visuals in self._grid_label_duplicates.values():
+            self._close_grid_label_duplicates(visuals)
+        self._grid_label_duplicates.clear()
+
+    def _sync_grid_label_duplicates(self) -> None:
+        active_label_layers = [
+            layer for layer in self.viewer.layers if layer._type_string == 'labels'
+        ]
+        active_label_set = set(active_label_layers)
+
+        for layer in list(self._grid_label_duplicates):
+            if layer not in active_label_set:
+                self._close_grid_label_duplicates(
+                    self._grid_label_duplicates.pop(layer)
+                )
+
+        duplicate_count = max(0, len(self._grid_occupied_views()) - 1)
+
+        for layer in active_label_layers:
+            duplicates = self._grid_label_duplicates.setdefault(layer, [])
+            while len(duplicates) > duplicate_count:
+                self._close_grid_label_duplicates([duplicates.pop()])
+            while len(duplicates) < duplicate_count:
+                vispy_layer = create_vispy_layer(layer)
+                self.viewer.camera.events.angles.connect(
+                    vispy_layer._on_camera_move
+                )
+                duplicates.append(vispy_layer)
+
+    def _reorder_layers_in_grid_view(
+        self, layer_indices: tuple[int, ...], occupied_view_index: int | None = None
+    ) -> None:
+        first_visible_found = False
+
+        for order, layer_index in enumerate(layer_indices):
+            layer = self.viewer.layers[layer_index]
+            vispy_layer = self._grid_visual_for_layer(layer, occupied_view_index)
+            vispy_layer.order = order
+
+            if layer.visible and not first_visible_found:
+                vispy_layer.first_visible = True
+                first_visible_found = True
+            else:
+                vispy_layer.first_visible = False
+            vispy_layer._on_blending_change()
+
     def _get_viewbox_at(self, position):
         """Get the viewbox and its grid coordinates from the mouse position.
 
@@ -488,7 +651,7 @@ class VispyCanvas:
 
         # loop through all viewboxes to check whether the click is inside
         for (grid_coords, layer_indices), viewbox in zip(
-            self.viewer.grid.iter_viewboxes(len(self.viewer.layers)),
+            self._grid_viewboxes(),
             self.grid_views,
             strict=False,
         ):
@@ -806,6 +969,8 @@ class VispyCanvas:
         disconnect_events(self.viewer.camera.events, vispy_layer)
         vispy_layer.close()
         del vispy_layer
+        if duplicate_visuals := self._grid_label_duplicates.pop(layer, []):
+            self._close_grid_label_duplicates(duplicate_visuals)
 
         self._update_layer_overlays(layer)
         del self._layer_overlay_to_visual[layer]
@@ -838,15 +1003,36 @@ class VispyCanvas:
     def _reorder_layers(self) -> None:
         """When the list is reordered, propagate changes to draw order."""
         if self.viewer.grid.enabled:
-            for _, layer_indices in self.viewer.grid.iter_viewboxes(
-                len(self.viewer.layers)
-            ):
-                if not layer_indices:
-                    continue
-                layers = [self.viewer.layers[idx] for idx in layer_indices]
-                self._reorder_layers_in_the_same_view(layers)
+            if self._grid_overlay_labels_enabled():
+                for layer in self.viewer.layers:
+                    if layer._type_string == 'labels':
+                        for vispy_layer in self._grid_label_visuals(layer):
+                            vispy_layer.first_visible = False
+
+                occupied_view_index = 0
+                for _, layer_indices in self._grid_viewboxes(
+                    include_overlay_labels=True
+                ):
+                    if not layer_indices:
+                        continue
+                    self._reorder_layers_in_grid_view(
+                        layer_indices, occupied_view_index
+                    )
+                    occupied_view_index += 1
+            else:
+                for _, layer_indices in self._grid_viewboxes():
+                    if not layer_indices:
+                        continue
+                    layers = [self.viewer.layers[idx] for idx in layer_indices]
+                    self._reorder_layers_in_the_same_view(layers)
         else:
+            self._clear_grid_label_duplicates()
             self._reorder_layers_in_the_same_view(self.viewer.layers)
+
+        self._defer_overlay_position_update()
+
+        self._scene_canvas._draw_order.clear()
+        self._scene_canvas.update()
 
     def _reorder_layers_in_the_same_view(self, layers):
         first_visible_found = False
@@ -862,11 +1048,6 @@ class VispyCanvas:
             else:
                 vispy_layer.first_visible = False
             vispy_layer._on_blending_change()
-
-        self._defer_overlay_position_update()
-
-        self._scene_canvas._draw_order.clear()
-        self._scene_canvas.update()
 
     def _defer_overlay_position_update(self):
         self._needs_overlay_position_update = True
@@ -906,7 +1087,7 @@ class VispyCanvas:
             # this loop works for both gridded mode and nongridded, since grid.iter_viewboxes returns
             # a single viewbox when the grid is disabled
             for view_info, vispy_overlay in zip_longest(
-                self.viewer.grid.iter_viewboxes(len(self.viewer.layers)),
+                self._grid_viewboxes(),
                 list(vispy_overlays),
             ):
                 if view_info is None:
@@ -993,11 +1174,10 @@ class VispyCanvas:
             if isinstance(overlay, CanvasOverlay):
                 self._connect_canvas_overlay_events(overlay)
 
-                if self.viewer.grid.enabled:
-                    row, col = self.viewer.grid.position(
-                        self.viewer.layers.index(layer),
-                        len(self.viewer.layers),
-                    )
+                if self.viewer.grid.enabled and (
+                    layer_position := self._grid_position_for_layer(layer)
+                ) is not None:
+                    row, col = layer_position
                     parent = self.grid[row, col]
                 else:
                     parent = self.view
@@ -1054,7 +1234,7 @@ class VispyCanvas:
 
         # then gridded viewer overlays and layer overlays, by viewbox, in order
         for viewbox_idx, (_, layer_indices) in enumerate(
-            self.viewer.grid.iter_viewboxes(len(self.viewer.layers))
+            self._grid_viewboxes()
         ):
             if not layer_indices:
                 # last empty boxes of the grid
@@ -1200,7 +1380,7 @@ class VispyCanvas:
         # grid are really not designed to be reset, so we have to replace it
         # when necessary (every time the grid shape changes)
         if self.grid.grid_size == self.viewer.grid.actual_shape(
-            len(self.viewer.layers)
+            self._grid_layout_layer_count()
         ):
             return
 
@@ -1214,9 +1394,7 @@ class VispyCanvas:
 
         self.grid = self.central_widget.add_grid(border_width=0)
 
-        for (row, col), _ in self.viewer.grid.iter_viewboxes(
-            len(self.viewer.layers)
-        ):
+        for (row, col), _ in self._grid_viewboxes():
             view = self.grid[row, col]
             # any border_color != None will add a padding of +1
             # see https://github.com/vispy/vispy/issues/1492
@@ -1246,19 +1424,43 @@ class VispyCanvas:
         self.on_draw(None)
 
     def _setup_single_view(self):
+        self._clear_grid_label_duplicates()
         for vispy_layer in self.layer_to_visual.values():
             vispy_layer.node.parent = self.view.scene
 
     def _setup_layer_views_in_grid(self):
-        for (row, col), layer_indices in self.viewer.grid.iter_viewboxes(
-            len(self.viewer.layers)
-        ):
+        if self._grid_overlay_labels_enabled():
+            self._sync_grid_label_duplicates()
+        else:
+            self._clear_grid_label_duplicates()
+
+        for (row, col), layer_indices in self._grid_viewboxes():
             view = self.grid[row, col]
 
             for idx in layer_indices:
                 napari_layer = self.viewer.layers[idx]
                 vispy_layer = self.layer_to_visual[napari_layer]
                 vispy_layer.node.parent = view.scene
+
+        if not self._grid_overlay_labels_enabled():
+            return
+
+        occupied_views = self._grid_occupied_views()
+        for layer in self.viewer.layers:
+            if layer._type_string == 'labels':
+                label_visuals = self._grid_label_visuals(layer)
+                if not occupied_views:
+                    for vispy_layer in label_visuals:
+                        vispy_layer.node.parent = None
+                    continue
+                for vispy_layer, view in zip(
+                    label_visuals,
+                    occupied_views,
+                    strict=False,
+                ):
+                    vispy_layer.node.parent = view.scene
+            elif layer._type_string != 'image':
+                self.layer_to_visual[layer].node.parent = None
 
     @property
     def _current_viewbox_size(self):
@@ -1288,10 +1490,10 @@ class VispyCanvas:
         """
         # TODO: this should be all handled on the grid model ideally, using validators
         raw_spacing = self.viewer.grid._compute_canvas_spacing_raw(
-            self._scene_canvas.size, len(self.viewer.layers)
+            self._scene_canvas.size, self._grid_layout_layer_count()
         )
         safe_spacing = self.viewer.grid._compute_canvas_spacing(
-            self._scene_canvas.size, len(self.viewer.layers)
+            self._scene_canvas.size, self._grid_layout_layer_count()
         )
 
         if raw_spacing > safe_spacing:

@@ -262,6 +262,9 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         settings.application.events.grid_spacing.connect(
             self._update_viewer_grid
         )
+        settings.application.events.grid_overlay_labels.connect(
+            self._update_viewer_grid
+        )
         settings.experimental.events.async_.connect(self._update_async)
 
         # Add extra reset_view event. Ideally this should be removed in the
@@ -289,6 +292,9 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
         self.layers.events.removed.connect(self._on_remove_layer)
         self.layers.events.reordered.connect(self._on_layers_change)
         self.layers.selection.events.active.connect(self._on_active_layer)
+        self.grid.events.overlay_labels.connect(
+            self._update_grid_settings
+        )
 
         # Add mouse callback
         self.mouse_wheel_callbacks.append(dims_scroll)
@@ -346,6 +352,13 @@ class ViewerModel(KeymapProvider, MousemapProvider, EventedModel):
             settings.application.grid_width,
         )
         self.grid.spacing = settings.application.grid_spacing
+        self.grid.overlay_labels = settings.application.grid_overlay_labels
+
+    def _update_grid_settings(self, event=None):
+        """Persist viewer grid settings back to application settings."""
+
+        settings = get_settings()
+        settings.application.grid_overlay_labels = self.grid.overlay_labels
 
     @validator('theme', allow_reuse=True)
     def _valid_theme(cls, v):
