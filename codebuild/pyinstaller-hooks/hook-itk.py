@@ -1,3 +1,5 @@
+from importlib import metadata as importlib_metadata
+
 from PyInstaller.utils.hooks import (
     collect_data_files,
     collect_dynamic_libs,
@@ -15,4 +17,13 @@ datas = [
 ]
 binaries = collect_dynamic_libs("itk")
 hiddenimports = collect_submodules("itk")
-datas += copy_metadata("itk", recursive=True)
+
+# `itk` is often a namespace package assembled from multiple wheel
+# distributions (for example `itk-core`, `itk-numerics`, etc.), so there may
+# be no distribution literally named `itk`. Copy metadata for any discovered
+# backing distributions on a best-effort basis.
+for dist_name in importlib_metadata.packages_distributions().get("itk", []):
+    try:
+        datas += copy_metadata(dist_name, recursive=True)
+    except Exception:
+        pass
