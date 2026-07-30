@@ -328,7 +328,7 @@ class VispyCanvas:
         self.bgcolor = self._last_theme_color
 
     def _disconnect_events(self) -> None:
-        self._clear_grid_label_duplicates()
+        self._clear_grid_label_duplicates(disconnect_only=True)
         disconnect_events(self.viewer.events, self)
         disconnect_events(self.viewer._overlays.events, self)
         disconnect_events(self.viewer.camera.events, self)
@@ -588,15 +588,29 @@ class VispyCanvas:
         return self.layer_to_visual[layer]
 
     def _close_grid_label_duplicates(
-        self, visuals: list[VispyBaseLayer[Layer]]
+        self,
+        visuals: list[VispyBaseLayer[Layer]],
+        *,
+        disconnect_only: bool = False,
     ) -> None:
         for vispy_layer in visuals:
             disconnect_events(self.viewer.camera.events, vispy_layer)
-            vispy_layer.close()
+            if disconnect_only:
+                # During canvas teardown, the vispy backend may already be in the
+                # process of shutting down. Disconnecting the temporary label
+                # visuals is enough; letting the canvas destroy their nodes avoids
+                # update calls against a deleted backend.
+                disconnect_events(vispy_layer.layer.events, vispy_layer)
+            else:
+                vispy_layer.close()
 
-    def _clear_grid_label_duplicates(self) -> None:
+    def _clear_grid_label_duplicates(
+        self, *, disconnect_only: bool = False
+    ) -> None:
         for visuals in self._grid_label_duplicates.values():
-            self._close_grid_label_duplicates(visuals)
+            self._close_grid_label_duplicates(
+                visuals, disconnect_only=disconnect_only
+            )
         self._grid_label_duplicates.clear()
 
     def _sync_grid_label_duplicates(self) -> None:
