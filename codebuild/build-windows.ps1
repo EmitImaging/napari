@@ -44,7 +44,7 @@ $Index = switch ($TorchFlavor) {
 Step "Installing dependencies ($TorchFlavor)"
 & $Py -m pip install torch torchvision --index-url $Index; Check "Could not install PyTorch."
 & $Py -m pip install -e ".[${env:QT_BACKEND},sam2]" antspyx "napari-plugin-manager>=0.1.9,<0.2.0" "napari-svg>=0.1.8" "napari-itk-io>=0.4.1" imageio-ffmpeg pyinstaller; Check "Could not install build dependencies."
-& $Py -c "import ants,itk,napari,napari_itk_io,napari_plugin_manager,sam2,torch,imageio_ffmpeg; from importlib.resources import files; assert files('napari_builtins').joinpath('builtins.yaml').is_file(); print('Dependencies OK:',torch.__version__,torch.version.cuda)"; Check "Dependency verification failed."
+& $Py -c "import ants,itk,napari,napari_itk_io,napari_plugin_manager,sam2,torch,torchvision,imageio_ffmpeg; from importlib.resources import files; assert files('napari_builtins').joinpath('builtins.yaml').is_file(); assert torchvision.extension._has_ops(); torchvision.ops.nms(torch.tensor([[0.,0.,1.,1.]]),torch.tensor([1.] ),0.5); print('Dependencies OK:',torch.__version__,torchvision.__version__,torch.version.cuda)"; Check "Dependency verification failed."
 
 $Version = (& $Py -c "from importlib.metadata import version; from packaging.version import Version; print(Version(version('napari')).base_version)").Trim()
 if (-not $Version) { Fail "Could not resolve napari version." }
@@ -68,7 +68,7 @@ $Pyi = @(
   "--noconfirm","--console","--name",$AppName,"--additional-hooks-dir","codebuild\pyinstaller-hooks"
   "--collect-all","napari","--collect-all","napari_builtins","--collect-all","cft","--collect-all","ants","--collect-all","itk","--collect-all","imageio_ffmpeg"
   "--collect-all","scipy","--collect-all","dask","--collect-all","magicgui","--collect-all","vispy","--collect-all","qtpy","--collect-all","superqt","--collect-all","napari_plugin_engine","--collect-all","npe2"
-  "--collect-all","napari_console","--collect-all","napari_plugin_manager","--collect-all","napari_svg","--collect-all","napari_itk_io","--collect-all","napari_imagecodecs","--collect-all","imagecodecs","--collect-all","sam2","--collect-all","s3fs"
+  "--collect-all","napari_console","--collect-all","napari_plugin_manager","--collect-all","napari_svg","--collect-all","napari_itk_io","--collect-all","napari_imagecodecs","--collect-all","imagecodecs","--collect-all","sam2","--collect-all","torchvision","--collect-all","s3fs"
   "--copy-metadata","napari","--copy-metadata","napari-plugin-engine","--copy-metadata","napari-plugin-manager","--copy-metadata","napari-svg","--copy-metadata","napari-itk-io","--copy-metadata","napari-imagecodecs","--copy-metadata","antspyx","--copy-metadata","imagecodecs","--copy-metadata","sam2","--copy-metadata","torch","--copy-metadata","torchvision","--copy-metadata","npe2","--copy-metadata","imageio","--copy-metadata","imageio-ffmpeg","--copy-metadata","s3fs","--copy-metadata","tifffile"
   "--hidden-import","torch","--hidden-import","torchvision","launch_napari_cft.py"
 )
@@ -80,7 +80,7 @@ $Dist = Join-Path $env:CODEBUILD_SRC_DIR "dist\$AppName"
 if (-not (Test-Path "$Dist\_internal\itk\ITKPyBasePython.py")) { Fail "Bundled ITK runtime is missing." }
 $Exe = Get-ChildItem $Dist -Filter "*.exe" -File | Select-Object -First 1
 if (-not $Exe) { Fail "Bundled napari executable was not found." }
-@('import dask,scipy,napari_builtins,napari_itk_io,napari_plugin_manager,torch','from importlib.resources import files','assert files("napari_builtins").joinpath("builtins.yaml").is_file()','print("Packaged plugins, SciPy, Dask, and torch OK")') | Set-Content .\verify_packaged.py -Encoding ASCII
+@('import dask,scipy,napari_builtins,napari_itk_io,napari_plugin_manager,torch,torchvision','from importlib.resources import files','assert files("napari_builtins").joinpath("builtins.yaml").is_file()','assert torchvision.extension._has_ops()','torchvision.ops.nms(torch.tensor([[0.,0.,1.,1.]]), torch.tensor([1.]), 0.5)','print("Packaged plugins, SciPy, Dask, Torch, and TorchVision ops OK")') | Set-Content .\verify_packaged.py -Encoding ASCII
 & $Exe.FullName --run-script .\verify_packaged.py; Check "Packaged runtime validation failed."
 
 Step "Compressing artifact"
